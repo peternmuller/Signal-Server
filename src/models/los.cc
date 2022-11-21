@@ -14,7 +14,11 @@
 #include "soil.hh"
 #include <pthread.h>
 
+#ifndef NTHREADS
 #define NUM_SECTIONS 4
+#else
+#define NUM_SECTIONS NTHREADS
+#endif
 
 namespace {
 	pthread_t threads[NUM_SECTIONS];
