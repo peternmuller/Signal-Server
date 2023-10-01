@@ -154,6 +154,9 @@ SDF formatted tiles can be created by converting SRTM tiles (30m or 90m) in HGT 
 
 Note these can be compressed using gzip or bzip2 if desired to save disk space and speed up loading the files.  For hi-res (HD) SRTM1 (30m) data, bzip2 compresses best, and for lo-res SRTM3 (90m) data, gzip seems to achieve the best compression.  Either will work fine for whichever data format and resolution is used.
 
+##### WARNING - BREAKING CHANGES
+Since 1st Oct 2023, .sdf filenames have been reformatted to address issue #35, replacing colons with underscores to enable compatibility with Python etc. The conversion utility has been updated so .hgt files may require reprocessing, or you can just rename files to replace : with _.
+
 
 #### -lid 
 ##### WGS84 ASCII grid tile (LIDAR) with dimensions and resolution defined in header
