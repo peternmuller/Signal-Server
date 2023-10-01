@@ -1107,7 +1107,7 @@ int main(int argc, char *argv[])
 		fprintf(stdout, "     -conf Confidence for ITM model (%% of 'situations') 1 to 99 (optional, default 50%%)\n");
 		fprintf(stdout, "     -resample Reduce Lidar resolution by specified factor (2 = 50%%)\n");
 		fprintf(stdout, "Output:\n");
-		fprintf(stdout, "     -o basename (Output file basename - required)\n");
+		fprintf(stdout, "     -o basename (Output file basename - required, min 5 chars)\n");
 		fprintf(stdout,	"     -dbm Plot Rxd signal power instead of field strength in dBuV/m\n");
 		fprintf(stdout, "     -rt Rx Threshold (dB / dBm / dBuV/m)\n");
 		fprintf(stdout, "     -R Radius (miles/kilometers)\n");
@@ -1284,13 +1284,21 @@ int main(int argc, char *argv[])
 			z = x + 1;
 
 			if (z <= y && argv[z][0] && argv[z][0] != '-') {
-				strncpy(mapfile, argv[z], 253);
-				strncpy(tx_site[0].name, "Tx", 2);
-				strncpy(tx_site[0].filename, argv[z], 253);
+				// sanity check length
+				if(strlen(argv[z]) < 5){
+					fprintf(stderr,"Output name is too short. Must be at least 5 chars\n");
+					exit(1);
+				}
+
 				/* Antenna pattern files have the same basic name as the output file
 				 * but with a different extension. If they exist, load them now */
 				if( (az_filename = (char*) calloc(strlen(argv[z]) + strlen(AZ_FILE_SUFFIX) + 1, sizeof(char))) == NULL )
 					return ENOMEM;
+
+				strncpy(mapfile, argv[z], 253);
+				strncpy(tx_site[0].name, "Tx", 2);
+				strncpy(tx_site[0].filename, argv[z], 253);
+
 				if (antenna_file[0] != '\0')
 				        strcpy(az_filename, antenna_file);
 				else
