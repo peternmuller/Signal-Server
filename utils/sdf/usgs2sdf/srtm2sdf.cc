@@ -137,7 +137,7 @@ int ReadSRTM(char *filename)
 			}
 
 			min_north=(int)(deg_north);
-			max_north=max_north+1;
+			max_north=min_north+1;
 
 			if (deg_west<0.0)
 				deg_west=-deg_west;
@@ -173,9 +173,9 @@ int ReadSRTM(char *filename)
 	lseek(infile,0L,SEEK_SET);
 
 	if (ippd==3600)
-		sprintf(sdf_filename, "%d:%d:%d:%d-hd.sdf", min_north, max_north, min_west, max_west);
+		sprintf(sdf_filename, "%d_%d_%d_%d-hd.sdf", min_north, max_north, min_west, max_west);
 	else
-		sprintf(sdf_filename, "%d:%d:%d:%d.sdf", min_north, max_north, min_west, max_west);
+		sprintf(sdf_filename, "%d_%d_%d_%d.sdf", min_north, max_north, min_west, max_west);
 
 	error=0;
 	replacement_flag=0;
@@ -424,7 +424,7 @@ int ReadUSGS()
 	   Full path and extentions are added later though
 	   subsequent function calls. */
 
-	sprintf(usgs_filename, "%d:%d:%d:%d", min_north, max_north, min_west, max_west);
+	sprintf(usgs_filename, "%d_%d_%d_%d", min_north, max_north, min_west, max_west);
 
 	return (LoadSDF(usgs_filename));
 }

@@ -1,4 +1,4 @@
-double version = 3.21;
+double version = 3.3;
 /****************************************************************************\
 *  Signal Server: Radio propagation simulator by Alex Farrant QCVS, 2E0TDW   *
 ******************************************************************************
@@ -1107,7 +1107,7 @@ int main(int argc, char *argv[])
 		fprintf(stdout, "     -conf Confidence for ITM model (%% of 'situations') 1 to 99 (optional, default 50%%)\n");
 		fprintf(stdout, "     -resample Reduce Lidar resolution by specified factor (2 = 50%%)\n");
 		fprintf(stdout, "Output:\n");
-		fprintf(stdout, "     -o basename (Output file basename - required)\n");
+		fprintf(stdout, "     -o basename (Output file basename - required, min 5 chars)\n");
 		fprintf(stdout,	"     -dbm Plot Rxd signal power instead of field strength in dBuV/m\n");
 		fprintf(stdout, "     -rt Rx Threshold (dB / dBm / dBuV/m)\n");
 		fprintf(stdout, "     -R Radius (miles/kilometers)\n");
@@ -1284,13 +1284,21 @@ int main(int argc, char *argv[])
 			z = x + 1;
 
 			if (z <= y && argv[z][0] && argv[z][0] != '-') {
-				strncpy(mapfile, argv[z], 253);
-				strncpy(tx_site[0].name, "Tx", 2);
-				strncpy(tx_site[0].filename, argv[z], 253);
+				// sanity check length
+				if(strlen(argv[z]) < 5){
+					fprintf(stderr,"Output name is too short. Must be at least 5 chars\n");
+					exit(1);
+				}
+
 				/* Antenna pattern files have the same basic name as the output file
 				 * but with a different extension. If they exist, load them now */
 				if( (az_filename = (char*) calloc(strlen(argv[z]) + strlen(AZ_FILE_SUFFIX) + 1, sizeof(char))) == NULL )
 					return ENOMEM;
+
+				strncpy(mapfile, argv[z], 253);
+				strncpy(tx_site[0].name, "Tx", 2);
+				strncpy(tx_site[0].filename, argv[z], 253);
+
 				if (antenna_file[0] != '\0')
 				        strcpy(az_filename, antenna_file);
 				else
@@ -1956,13 +1964,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (max_range > 100 || LR.frq_mhz == 446.446) {  // Huh?
-		cropping=false;
-	}
-
 	if (ppa == 0) {
-	  if (propmodel == 2) {  // Modl 2 = LOS
-			cropping = false;
+	  if (propmodel == 2) {  // Model 2 = LOS
+			cropping = false; // TODO: File is written in DoLOS() so this needs moving to PlotPropagation() to allow styling, cropping etc
 			PlotLOSMap(tx_site[0], altitudeLR, ano_filename, use_threads);
 			DoLOS(mapfile, geo, kml, ngs, tx_site, txsites);
 		} else {
@@ -1974,15 +1978,6 @@ int main(int argc, char *argv[])
 				fflush(stderr);
 			}	
 
-			// nearfield void
-
-			for (float x=-0.001; x<0.001;x=x+0.0001){
-			        for (float y=-0.001; y<0.001;y=y+0.0001){
-				        if(GetSignal(tx_site[0].lat+y, tx_site[0].lon+x)<=0) {
-					        PutSignal(tx_site[0].lat+y, tx_site[0].lon+x, hottest);
-					}
-				}
-			}
 
 			if (cropping) {
 				// CROPPING Factor determined in propPathLoss().
