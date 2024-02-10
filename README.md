@@ -1,3 +1,5 @@
+**Note: This repo was forked from the CloudRF Signal-Server repo before that repository was deleted sometime in late 2023. Any updates and changes since then will be documented appropriately.**
+
 # Signal Server
 Multi-threaded radio propagation simulator based upon SPLAT! by Alex Farrant QCVS, 2E0TDW. 
 
