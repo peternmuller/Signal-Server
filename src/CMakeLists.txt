@@ -47,6 +47,9 @@ find_library(dl dl)
 find_library(pthread pthread)
 find_library(z z)
 
+# Spdlog
+find_package(spdlog REQUIRED)
+
 add_executable(signalserver main.cc)
 add_executable(signalserverHD main.cc)
 add_executable(signalserverLIDAR main.cc)
@@ -72,6 +75,7 @@ target_link_libraries(signalserver
 			PUBLIC dl
 			PUBLIC pthread
 			PUBLIC z
+            PUBLIC spdlog::spdlog
 		  )
 
 target_link_libraries(signalserverHD 
@@ -95,6 +99,7 @@ target_link_libraries(signalserverHD
 			PUBLIC dl
 			PUBLIC pthread
 			PUBLIC z
+            PUBLIC spdlog::spdlog
 		  )
 
 target_link_libraries(signalserverLIDAR 
@@ -118,6 +123,7 @@ target_link_libraries(signalserverLIDAR
 			PUBLIC dl
 			PUBLIC pthread
 			PUBLIC z
+            PUBLIC spdlog::spdlog
 		  )
 
 # INSTALL target (make install)

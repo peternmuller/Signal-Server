@@ -13,19 +13,18 @@
 #include "egli.hh"
 #include "soil.hh"
 #include <pthread.h>
-
-#ifndef NTHREADS
-#define NUM_SECTIONS 4
-#else
-#define NUM_SECTIONS NTHREADS
-#endif
+#include <spdlog/spdlog.h>
+#include <vector>
+#include <limits.h>
 
 namespace {
-	pthread_t threads[NUM_SECTIONS];
-	unsigned int thread_count = 0;
+	std::vector<pthread_t> threads;
 	pthread_mutex_t maskMutex;
 	bool ***processed;
 	bool has_init_processed = false;
+
+    // We use this to store what points in our plot have already been processed
+    std::vector<std::vector<std::vector<bool>>> processedPoints;
 
 	struct propagationRange {
 		double min_west, max_west, min_north, max_north;
@@ -37,69 +36,31 @@ namespace {
 		int propmodel, knifeedge, pmenv;
 	};
 
-	void* rangePropagation(void *parameters)
-	{
-		propagationRange *v = (propagationRange*)parameters;
-		if(v->use_threads) {
-			alloc_elev();
-			alloc_path();
-		}
-
-		double minwest = dpp + (double)v->min_west;
-		double lon = v->eastwest ? minwest : v->min_west;
-		double lat = v->min_north;
-		int y = 0;
-
-		do {
-			if (lon >= 360.0)
-				lon -= 360.0;
-
-			site edge;
-			edge.lat = lat;
-			edge.lon = lon;
-			edge.alt = v->altitude;
-
-			if(v->los)
-				PlotLOSPath(v->source, edge, v->mask_value, v->fd);
-			else
-				PlotPropPath(v->source, edge, v->mask_value, v->fd, v->propmodel,
-					v->knifeedge, v->pmenv);
-
-			++y;
-			if(v->eastwest)
-			lon = minwest + (dpp * (double)y);
-			else
-			lat = (double)v->min_north + (dpp * (double)y);
-
-
-			} while ( v->eastwest 
-				? (LonDiff(lon, (double)v->max_west) <= 0.0)
-				: (lat < (double)v->max_north) );
-
-			if(v->use_threads) {
-				free_elev();
-				free_path();
-		}
-		return NULL;
-	}
-
 	void init_processed()
 	{
 		int i;
 		int x;
 		int y;
 
-		processed = new bool **[MAXPAGES];
+		/*processed = new bool **[MAXPAGES];
 		for (i = 0; i < MAXPAGES; i++) {
 			processed[i] = new bool *[ippd];
 			for (x = 0; x < ippd; x++)
 				processed[i][x] = new bool [ippd];
-		}
+		}*/
 
+        // Initialize our vector to the correct size (this is ugly but apparently the best way to do this)
+        processedPoints = std::vector<std::vector<std::vector<bool>>>(MAXPAGES, std::vector<std::vector<bool>>(ippd, std::vector<bool>(ippd)));
+
+        spdlog::debug("Initialized processedPoints vector of side {}x{}x{}", MAXPAGES, ippd, ippd);
+
+        // Populate our processedPoints vector with the points to process
 		for (i = 0; i < MAXPAGES; i++) {
 			for (x = 0; x < ippd; x++) {
-				for (y = 0; y < ippd; y++)
-					processed[i][x][y] = false;
+				for (y = 0; y < ippd; y++) {
+                    processedPoints[i][x][y] = false;
+					//processed[i][x][y] = false;
+                } 
 			}
 		}
 
@@ -133,13 +94,12 @@ namespace {
 			check outside a mutex first without worrying about race 
 			conditions. But we must lock the mutex before updating the 
 			value. */
-
-			if(!processed[indx][x][y]) {
+			if(!processedPoints[indx][x][y]) {
 				pthread_mutex_lock(&maskMutex);
 
-				if(!processed[indx][x][y]) {
+				if(!processedPoints[indx][x][y]) {
 					rtn = true;
-					processed[indx][x][y] = true;
+					processedPoints[indx][x][y] = true;
 				}
 
 				pthread_mutex_unlock (&maskMutex);
@@ -148,28 +108,90 @@ namespace {
 		}
 		return rtn;
 	}
+
+    /**
+     * Calulate a propagation for a specific range
+     * 
+     * @param *parameters parameters object for the propagation range
+    */
+	void* rangePropagation(void *parameters)
+	{
+        // Create propagationRange opbject based on our parameters
+		propagationRange *v = (propagationRange*)parameters;
+		if(v->use_threads) {
+			alloc_elev();
+			alloc_path();
+		}
+
+        // Check if we're plotting a single line
+        if (v->min_north == v->max_north && v->min_west == v->max_west) {
+            spdlog::warn("Propagation plot range is a single point!");
+        }
+
+        // If our min & max lon coords are the same, it's a vertical line
+        bool vertical = (v->min_west == v->max_west) ? true : false;
+
+        spdlog::debug("Starting rangePropagation for {} range {:.6f}N {:.6f}W to {:.6f}N {:.6f}W, {:.8f} dpp",
+            vertical ? "vertical" : "horizontal",
+            v->min_north, v->min_west, v->max_north, v->max_west, dpp);
+
+        // Init our varaibles for tracking position over the loop
+        double lat = v->min_north;
+        double lon = v->min_west;
+        int y = 0;
+        // Iterate
+		do {
+			if (lon >= 360.0)
+				lon -= 360.0;
+
+			site edge;
+			edge.lat = lat;
+			edge.lon = lon;
+			edge.alt = v->altitude;
+
+            //spdlog::debug("Plotting propagation path to {:.6f}N {:.6f}W", edge.lat, edge.lon);
+
+			if(v->los)
+				PlotLOSPath(v->source, edge, v->mask_value);
+			else
+				PlotPropPath(v->source, edge, v->mask_value, v->fd, v->propmodel,
+					v->knifeedge, v->pmenv);
+
+			++y;
+			if(vertical) {
+                lat = (double)v->min_north + (dpp * (double)y);
+            } else {
+			    lon = (double)v->min_west + (dpp * (double)y);
+            }
+
+        } while ( vertical ? (lat < (double)v->max_north) : (LonDiff(lon, (double)v->max_west) <= 0.0) );
+
+        if(v->use_threads) {
+            free_elev();
+            free_path();
+		}
+		return NULL;
+	}
   
 	void beginThread(void *arg)
 	{
-		if(!has_init_processed)
-			init_processed();
-
-		int rc = pthread_create(&threads[thread_count], NULL, rangePropagation, arg);
+        pthread_t new_thread;
+		int rc = pthread_create(&new_thread, NULL, rangePropagation, arg);
 		if (rc)
-			fprintf(stderr,"ERROR; return code from pthread_create() is %d\n", rc);
+			spdlog::error("Got return code from pthread_create(): {}", rc);
 		else
-			++thread_count;
+			threads.push_back(new_thread);
 	}
 
 	void finishThreads()
 	{
 		void* status;
-		for(unsigned int i=0; i<thread_count; i++) {
+		for(unsigned int i=0; i<threads.size(); i++) {
 			int rc = pthread_join(threads[i], &status);
 			if (rc)
-				fprintf(stderr,"ERROR; return code from pthread_join() is %d\n", rc);
+				spdlog::error("Got return code from pthread_join(): {}", rc);
+            threads.erase(threads.begin() + i);
 		}
-		thread_count = 0;
 	}
 }
 
@@ -229,8 +251,7 @@ static double ked(double freq, double rxh, double dkm)
 	}
 }
 
-void PlotLOSPath(struct site source, struct site destination, char mask_value,
-         FILE *fd)
+void PlotLOSPath(struct site source, struct site destination, char mask_value)
 {
     /* This function analyzes the path between the source and
        destination locations. It determines which points along
@@ -343,9 +364,21 @@ void PlotLOSPath(struct site source, struct site destination, char mask_value,
     }
 }
 
-void PlotPropPath(struct site source, struct site destination,
-		  unsigned char mask_value, FILE * fd, int propmodel,
-		  int knifeedge, int pmenv)
+/**
+ * Calculate propagation for the points on a line between two coordinates
+ * 
+ * @param source - the source site object
+ * @param destination - the destination site object
+*/
+void PlotPropPath(
+    struct site source, 
+    struct site destination,
+	unsigned char mask_value, 
+    FILE * fd, 
+    int propmodel,
+	int knifeedge, 
+    int pmenv
+)
 {
 
 	int x, y, ifs, ofs, errnum;
@@ -750,7 +783,7 @@ void PlotPropPath(struct site source, struct site destination,
 }
 
 void PlotLOSMap(struct site source, double altitude, char *plo_filename,
-		bool use_threads)
+		bool use_threads, uint8_t segments)
 {
 	/* This function performs a 360 degree sweep around the
 	   transmitter site (source location), and plots the
@@ -780,9 +813,9 @@ void PlotLOSMap(struct site source, double altitude, char *plo_filename,
 	double range_min_north[] = {max_north, min_north, min_north, min_north};
 	double range_max_west[] = {max_west, min_west, max_west, max_west};
 	double range_max_north[] = {max_north, max_north, min_north, max_north};
-	propagationRange* r[NUM_SECTIONS];
+	propagationRange* r[segments];
 
-	for(int i = 0; i < NUM_SECTIONS; ++i) {
+	for(int i = 0; i < segments; ++i) {
 		propagationRange *range = new propagationRange;
 		r[i] = range;
 		range->los = true;
@@ -809,7 +842,7 @@ void PlotLOSMap(struct site source, double altitude, char *plo_filename,
 	if(use_threads)
 		finishThreads();
 
-	for(int i = 0; i < NUM_SECTIONS; ++i){
+	for(int i = 0; i < segments; ++i){
 		delete r[i];
 	}
 
@@ -827,38 +860,38 @@ void PlotLOSMap(struct site source, double altitude, char *plo_filename,
 	}
 }
 
-
-void PlotPropagation(struct site source, double altitude, char *plo_filename,
-		     int propmodel, int knifeedge, int haf, int pmenv, bool
-		     use_threads)
+void PlotPropagation(struct site source, bbox bounds, 
+                    double altitude, char *plo_filename,
+		            int propmodel, int knifeedge, int haf, int pmenv, bool
+		            use_threads, uint8_t segments)
 {
 	static __thread unsigned char mask_value = 1;
 	FILE *fd = NULL;
+
+    char plotType[32];
 	
 	if (LR.erp == 0.0 && debug)
-		fprintf(stderr, "path loss");
+		sprintf(plotType, "path loss");
 	else {
 		if (debug) {
 			if (dbm)
-				fprintf(stderr, "signal power level");
+				sprintf(plotType, "signal power level");
 			else
-				fprintf(stderr, "field strength");
+				sprintf(plotType, "field strength");
 		}
 	}
-	if (debug) {
-		fprintf(stderr,
-			" contours of \"%s\" out to a radius of %.2f %s with Rx antenna(s) at %.2f %s AGL\n",
+	spdlog::debug("Plotting {} contours of \"{}\" out to a radius of {:.2f} {} with Rx antenna(s) at {:.2f} {} AGL",
+            plotType,
 			source.name,
 			metric ? max_range * KM_PER_MILE : max_range,
 			metric ? "kilometers" : "miles",
 			metric ? altitude * METERS_PER_FOOT : altitude,
 			metric ? "meters" : "feet");
-	}
 
-	if (clutter > 0.0 && debug)
-		fprintf(stderr, "\nand %.2f %s of ground clutter",
-			metric ? clutter * METERS_PER_FOOT : clutter,
-			metric ? "meters" : "feet");
+	if (clutter > 0.0)
+        spdlog::debug("Using {:.2f} {} of ground clutter", metric ? clutter * METERS_PER_FOOT : clutter, metric ? "meters" : "feet");
+
+    spdlog::debug("TX site location: {:.6f}N {:.6f}W at {:.2f} ft AGL", source.lat, source.lon, source.alt);
 
 	if (plo_filename[0] != 0)
 		fd = fopen(plo_filename, "wb");
@@ -866,58 +899,133 @@ void PlotPropagation(struct site source, double altitude, char *plo_filename,
 	if (fd != NULL) {
 		fprintf(fd,
 			"%.3f, %.3f\t; max_west, min_west\n%.3f, %.3f\t; max_north, min_north\n",
-			max_west, min_west, max_north, min_north);
+			bounds.upper_left.lon, bounds.lower_right.lon, bounds.upper_left.lat, bounds.lower_right.lat);
 	}
 
+    double plot_width = bounds.upper_left.lon - bounds.lower_right.lon;
+    double plot_height = bounds.upper_left.lat - bounds.lower_right.lat;
+
+    /**
+     * EXAMPLE - 6 segments
+     * 
+     * We divide our area into as follows:
+     * __|__1__|__2__|__
+     *   |           |
+     * 6 |           | 3
+     * __|___________|__
+     *   |  5  |  4  |
+     * 
+    */
+
+    // NUM_SECTIONS must always be a multiple of 2 and greater than 4, because we have to divide a 4-sided rectangle equally
+    uint8_t lon_edge_segments = (segments / 4);   // Our longitudal edges (top & bottom) will get the greater of the two segment counts
+    uint8_t lat_edge_segments = (segments / 2) - lon_edge_segments; // Our latitudal edges are whatever is left over
+
+    // Calculate the widths of each segment
+    double edge_width = plot_width / lon_edge_segments;
+    double edge_height = plot_height / lat_edge_segments;
+
+	spdlog::debug("With {} sections, our {:.6f} x {:.6f} area will be divided into {} x {} edge segments of size {:.6f} x {:.6f} deg", 
+        segments, plot_width, plot_height, lon_edge_segments, lat_edge_segments, edge_width, edge_height
+    );
 	
-	// Four sections start here
-	// Process north edge east/west, east edge north/south,
-	// south edge east/west, west edge north/south
-	double range_min_west[] = {min_west, min_west, min_west, max_west};
-	double range_min_north[] = {max_north, min_north, min_north, min_north};
-	double range_max_west[] = {max_west, min_west, max_west, max_west};
-	double range_max_north[] = {max_north, max_north, min_north, max_north};
-	propagationRange* r[NUM_SECTIONS];
+    // Array to hold our edge ranges
+    std::vector<propagationRange> ranges;
 
-	for(int i = 0; i < NUM_SECTIONS; ++i) {
-		propagationRange *range = new propagationRange;
-		r[i] = range;
-		range->los = false;
+    // Create our longitudal (top and bottom edge) ranges
+    for (int i = 0; i < lon_edge_segments; i++) {
+        // Create two ranges for the top & bottom edges which will share longitude values
+        propagationRange top_range;
+        propagationRange bot_range;
+        // We're not doing an LOS plot
+        top_range.los = false;
+        bot_range.los = false;
+        // Calculate the longitudes for both ranges
+        double lon_min = bounds.lower_right.lon + (edge_width * i);
+        double lon_max = bounds.lower_right.lon + (edge_width * (1+i));
+        // Set top (on our max_north latitude)
+        top_range.min_west = lon_min;
+        top_range.max_west = lon_max;
+        top_range.min_north = bounds.upper_left.lat;
+        top_range.max_north = bounds.upper_left.lat;
+        // Set bottom (on our min_north latitude)
+        bot_range.min_west = lon_min;
+        bot_range.max_west = lon_max;
+        bot_range.min_north = bounds.lower_right.lat;
+        bot_range.max_north = bounds.lower_right.lat;
+        // Append to our vector
+        ranges.push_back(top_range);
+        ranges.push_back(bot_range);
+        // Log
+        spdlog::debug("Added top & bottom segments from {:.6f}W to {:.6f}W", lon_min, lon_max);
+    }
 
-		// Only process correct half
-		if((NUM_SECTIONS - i) <= (NUM_SECTIONS / 2) && haf == 1)
-			continue;
-		if((NUM_SECTIONS - i) > (NUM_SECTIONS / 2) && haf == 2)
-			continue;
+    // Create our latitudal (left and right) ranges
+    for (int i = 0; i < lat_edge_segments; i++) {
+        // Create two ranges for the left & right edges since they share latitude values
+        propagationRange left_range;
+        propagationRange right_range;
+        // We're not doing an LOS plot
+        left_range.los = false;
+        right_range.los = false;
+        // Calculate the latitude start & stop for both ranges
+        double lat_min = bounds.lower_right.lat + (edge_height * i);
+        double lat_max = bounds.lower_right.lat + (edge_height * (i+1));
+        // Set left (on our max_west longitude)
+        left_range.min_west = bounds.upper_left.lon;
+        left_range.max_west = bounds.upper_left.lon;
+        left_range.min_north = lat_min;
+        left_range.max_north = lat_max;
+        // Set right (on our min_west longitude)
+        right_range.min_west = bounds.lower_right.lon;
+        right_range.max_west = bounds.lower_right.lon;
+        right_range.min_north = lat_min;
+        right_range.max_north = lat_max;
+        // Append to our vector
+        ranges.push_back(left_range);
+        ranges.push_back(right_range);
+        // Log
+        spdlog::debug("Added left & right segments from {:.6f}N to {:.6f}N", lat_min, lat_max);
+    }
 
+    // Make sure we didn't do anythng wrong
+    if (ranges.size() != segments) {
+        spdlog::error("Our vector of ranges ({}) does not match expected segment count {}", ranges.size(), segments);
+        exit(1);
+    }
+    
+    // Init our vector for storing processing progress
+    if (!has_init_processed) {
+        init_processed();
+    }
 
-		range->eastwest = (range_min_west[i] == range_max_west[i] ? false : true);
-		range->min_west = range_min_west[i];
-		range->max_west = range_max_west[i];
-		range->min_north = range_min_north[i];
-		range->max_north = range_max_north[i];
-
-		range->use_threads = use_threads;
-		range->altitude = altitude;
-		range->source = source;
-		range->mask_value = mask_value;
-		range->fd = fd;
-		range->propmodel = propmodel;
-		range->knifeedge = knifeedge;
-		range->pmenv = pmenv;
-
-		if(use_threads)
-			beginThread(range);
-		else
-			rangePropagation(range);
-
-	}
+    // Iterate over the final list of ranges
+    for (size_t i = 0; i < ranges.size(); i++) {
+        // Set common variables
+        ranges[i].use_threads = use_threads;
+        ranges[i].altitude = altitude;
+        ranges[i].source = source;
+        ranges[i].mask_value = mask_value;
+        ranges[i].fd = fd;
+        ranges[i].propmodel = propmodel;
+        ranges[i].knifeedge = knifeedge;
+        ranges[i].pmenv = pmenv;
+        // Start a thread if we're using threads
+        if (use_threads) {
+            spdlog::debug("Starting calc thread for edge segment {:.6f}N {:.6f}W to {:.6f}N {:.6f}W", ranges[i].min_north, ranges[i].min_west, ranges[i].max_north, ranges[i].max_west);
+            beginThread(&ranges[i]);
+        }
+        else {
+            spdlog::debug("Starting single-thread calc for edge segment {:.6f}N {:.6f}W to {:.6f}N {:.6f}W", ranges[i].min_north, ranges[i].min_west, ranges[i].max_north, ranges[i].max_west);
+            rangePropagation(&ranges[i]);
+        }
+    }
 
 	if(use_threads)
 		finishThreads();
 
-	for(int i = 0; i < NUM_SECTIONS; ++i){
-		delete r[i];
+	for(size_t i = 0; i < ranges.size(); i++){
+		ranges.erase(ranges.begin() + i);
 	}
 
        if (fd != NULL)

@@ -15,8 +15,6 @@
   #define HALFPI	1.570796326794896
 #endif
 
-#define NTHREADS 8
-
 #define DEG2RAD		1.74532925199e-02
 #define	EARTHRADIUS	20902230.97
 #define	METERS_PER_MILE 1609.344
@@ -24,6 +22,7 @@
 #define	KM_PER_MILE	1.609344
 #define	FEET_PER_MILE	5280.0
 #define FOUR_THIRDS	1.3333333333333
+#define KM_PER_DEG_LAT 110.754
 
 #define MAX(x,y)((x)>(y)?(x):(y))
 
@@ -73,6 +72,16 @@ struct region {
 	unsigned char color[128][3];
 	int level[128];
 	int levels;
+};
+
+struct coord {
+    double lat;
+    double lon;
+};
+
+struct bbox {
+    coord lower_right;
+    coord upper_left;
 };
 
 extern int MAXPAGES;
