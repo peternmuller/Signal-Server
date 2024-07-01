@@ -91,7 +91,8 @@ License: GNU General Public License (GPL) version 2
 
 Radio propagation simulator by Alex Farrant QCVS, 2E0TDW
 Based upon SPLAT! by John Magliacane, KD2BD
-Some feature enhancements/additions by Aaron A. Collins, N9OZBAdditional improvements and multithreading fixes by P. McDonnell, W3AXL
+Some feature enhancements/additions by Aaron A. Collins, N9OZB
+Additional improvements and multithreading fixes by P. McDonnell, W3AXL
 
 Usage: signalserver [data options] [input options] [antenna options] [output options] -o outputfile
 
