@@ -19,6 +19,20 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Get GIT commit branch & hash
+execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 # Prepare internal libraries search
 include_directories(models)
 
@@ -54,6 +68,24 @@ find_package(spdlog REQUIRED)
 add_executable(signalserver main.cc)
 add_executable(signalserverHD main.cc)
 add_executable(signalserverLIDAR main.cc)
+
+target_compile_definitions(
+    signalserver PRIVATE
+    "-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\""
+    "-DGIT_BRANCH=\"${GIT_BRANCH}\""
+)
+
+target_compile_definitions(
+    signalserverHD PRIVATE
+    "-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\""
+    "-DGIT_BRANCH=\"${GIT_BRANCH}\""
+)
+
+target_compile_definitions(
+    signalserverLIDAR PRIVATE
+    "-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\""
+    "-DGIT_BRANCH=\"${GIT_BRANCH}\""
+)
 
 target_link_libraries(signalserver 
 			PUBLIC image

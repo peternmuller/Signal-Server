@@ -1,4 +1,3 @@
-double version = 3.3;
 /****************************************************************************\
 *  Signal Server: Radio propagation simulator by Alex Farrant QCVS, 2E0TDW   *
 ******************************************************************************
@@ -31,6 +30,7 @@ double version = 3.3;
 #include <bzlib.h>
 #include <zlib.h>
 
+#include "main.hh"
 #include "common.hh"
 #include "inputs.hh"
 #include "outputs.hh"
@@ -1083,13 +1083,18 @@ int main(int argc, char *argv[])
 
     strncpy(ss_name, "Signal Server\0", 14);
 
-    if (argc == 1) {
+    fprintf(stdout, VERT_SEP "\n");
+    fprintf(stdout, "%s %d.%d (%s %s)\n", ss_name, VER_MAJ, VER_MIN, GIT_BRANCH, GIT_COMMIT_HASH);
+    fprintf(stdout, "    Compile date: %s %s\n", __DATE__, __TIME__);
+    fprintf(stdout, "    Built for %d DEM tiles at %d pixels\n", MAXPAGES, IPPD);
+    fprintf(stdout, VERT_SEP "\n");
 
-        fprintf(stdout, "Version: %s %.2f (Built for %d DEM tiles at %d pixels)\n", ss_name, version,MAXPAGES, IPPD);
+    if (argc == 1) {
         fprintf(stdout, "License: GNU General Public License (GPL) version 2\n\n");
         fprintf(stdout, "Radio propagation simulator by Alex Farrant QCVS, 2E0TDW\n");
         fprintf(stdout, "Based upon SPLAT! by John Magliacane, KD2BD\n");
-        fprintf(stdout, "Some feature enhancements/additions by Aaron A. Collins, N9OZB\n\n");
+        fprintf(stdout, "Some feature enhancements/additions by Aaron A. Collins, N9OZB");
+        fprintf(stdout, "Additional improvements and multithreading fixes by P. McDonnell, W3AXL\n\n");
         fprintf(stdout, "Usage: signalserver [data options] [input options] [antenna options] [output options] -o outputfile\n\n");
         fprintf(stdout, "Data:\n");
         fprintf(stdout, "     -sdf Directory containing SRTM derived .sdf DEM tiles (may be .gz or .bz2)\n");
@@ -1818,7 +1823,7 @@ int main(int argc, char *argv[])
     spdlog::info("");
     spdlog::info("    Directories:");
     spdlog::info("        SDF: {}", sdf_path);
-    spdlog::info("----------------------------------------------------------------------------------");
+    spdlog::info(VERT_SEP);
 
     /**
      * Calculate the required data bounds to the nearest whole degree using WGS 84 approximation
