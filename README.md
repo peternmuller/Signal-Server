@@ -61,18 +61,19 @@ Additional programs/scripts will be required to prepare inputs such as .hgt tile
 ## Install dependencies
 Assuming Debian / Ubuntu, this will fetch the core libraries needed to build it as well as an image library for manipulating outputs.
 ```
-sudo apt-get install g++ cmake libbz2-dev imagemagick
+sudo apt-get install g++ cmake libbz2-dev imagemagick spdlog
 ```
 
 ## Installation
 Change into the source directory to build the binaries.
 ```
-cd src
-cmake .
+mkdir build
+cd build
+cmake ../src
 make
 ```
 
-## Test
+## Test (needs updating)
 Run the test script from the top level directory. Binaries are in the src directory.
 Test output will be in output/tests
 ```
@@ -81,14 +82,16 @@ Test output will be in output/tests
 
 ## Parameters
 ```
-Version: Signal Server 3.3 (Built for 100 DEM tiles at 1200 pixels)
+----------------------------------------------------------------------------------
+Signal Server 4.0 (master c1e8c72)
+    Compile date: Jul  1 2024 01:05:46
+    Built for 32 DEM tiles at 3600 pixels
+----------------------------------------------------------------------------------
 License: GNU General Public License (GPL) version 2
 
 Radio propagation simulator by Alex Farrant QCVS, 2E0TDW
 Based upon SPLAT! by John Magliacane, KD2BD
-Some feature enhancements/additions by Aaron A. Collins, N9OZB
-                                       Tom Hayward, KD7LXL
-                                       Darcy Buskermolen, VA7DBI
+Some feature enhancements/additions by Aaron A. Collins, N9OZBAdditional improvements and multithreading fixes by P. McDonnell, W3AXL
 
 Usage: signalserver [data options] [input options] [antenna options] [output options] -o outputfile
 
@@ -117,8 +120,9 @@ Input:
      -rel Reliability for ITM model (% of 'time') 1 to 99 (optional, default 50%)
      -conf Confidence for ITM model (% of 'situations') 1 to 99 (optional, default 50%)
      -resample Reduce Lidar resolution by specified factor (2 = 50%)
+     -segments Number of segments to divide the plot rectangle into (must be even and > 4)
 Output:
-     -o basename (Output file basename - required)
+     -o basename (Output file basename - required, min 5 chars)
      -dbm Plot Rxd signal power instead of field strength in dBuV/m
      -rt Rx Threshold (dB / dBm / dBuV/m)
      -R Radius (miles/kilometers)
@@ -143,6 +147,7 @@ Debugging:
      -ng Normalise Path Profile graph
      -haf Halve 1 or 2 (optional)
      -nothreads Turn off threaded processing
+     -rp Use experimental radial processing
 ```
 
 ### REFERENCE DATA
