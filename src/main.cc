@@ -1093,7 +1093,7 @@ int main(int argc, char *argv[])
         fprintf(stdout, "License: GNU General Public License (GPL) version 2\n\n");
         fprintf(stdout, "Radio propagation simulator by Alex Farrant QCVS, 2E0TDW\n");
         fprintf(stdout, "Based upon SPLAT! by John Magliacane, KD2BD\n");
-        fprintf(stdout, "Some feature enhancements/additions by Aaron A. Collins, N9OZB");
+        fprintf(stdout, "Some feature enhancements/additions by Aaron A. Collins, N9OZB\n");
         fprintf(stdout, "Additional improvements and multithreading fixes by P. McDonnell, W3AXL\n\n");
         fprintf(stdout, "Usage: signalserver [data options] [input options] [antenna options] [output options] -o outputfile\n\n");
         fprintf(stdout, "Data:\n");
