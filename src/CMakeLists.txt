@@ -28,6 +28,7 @@ add_library(image-ppm STATIC image-ppm.cc)
 add_library(inputs STATIC inputs.cc)
 add_library(outputs STATIC outputs.cc)
 add_library(tiles STATIC tiles.cc)
+add_library(geo STATIC geo.cc)
 
 add_library(cost STATIC models/cost.cc)
 add_library(ecc33 STATIC models/ecc33.cc)
@@ -76,6 +77,7 @@ target_link_libraries(signalserver
 			PUBLIC pthread
 			PUBLIC z
             PUBLIC spdlog::spdlog
+            PUBLIC geo
 		  )
 
 target_link_libraries(signalserverHD 
@@ -100,6 +102,7 @@ target_link_libraries(signalserverHD
 			PUBLIC pthread
 			PUBLIC z
             PUBLIC spdlog::spdlog
+            PUBLIC geo
 		  )
 
 target_link_libraries(signalserverLIDAR 
@@ -124,6 +127,7 @@ target_link_libraries(signalserverLIDAR
 			PUBLIC pthread
 			PUBLIC z
             PUBLIC spdlog::spdlog
+            PUBLIC geo
 		  )
 
 # INSTALL target (make install)

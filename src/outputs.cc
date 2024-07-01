@@ -11,6 +11,7 @@
 #include "common.hh"
 #include "main.hh"
 #include "inputs.hh"
+#include "models/los.hh"
 #include "models/cost.hh"
 #include "models/ecc33.hh"
 #include "models/ericsson.hh"
@@ -993,7 +994,7 @@ void DoLOS(char *filename, unsigned char geo, unsigned char kml,
 }
 
 void PathReport(struct site source, struct site destination, char *name,
-		char graph_it, int propmodel, int pmenv, double rxGain)
+		char graph_it, PropModel propmodel, int pmenv, double rxGain)
 {
 	/* This function writes a PPA Path Report (name.txt) to
 	   the filesystem.  If (graph_it == 1), then gnuplot is invoked

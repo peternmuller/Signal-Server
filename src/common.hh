@@ -15,8 +15,11 @@
   #define HALFPI	1.570796326794896
 #endif
 
+// Multiplier to convert decimal degrees to radians
 #define DEG2RAD		1.74532925199e-02
+// Radius of the earth, in ft
 #define	EARTHRADIUS	20902230.97
+// Other common conversion multipliers
 #define	METERS_PER_MILE 1609.344
 #define	METERS_PER_FOOT 0.3048
 #define	KM_PER_MILE	1.609344

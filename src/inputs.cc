@@ -728,16 +728,28 @@ int LoadSDF_BZ(char *name)
 		bzbuf_pointer = bzbytes_read = 0L;
 
 		pos = sscanf(BZfgets(bzline, bzfd, 19), "%f", &dem[indx].max_west);
-		if (bzerror != BZ_OK || pos == EOF) return -errno;
+		if (bzerror != BZ_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		pos = sscanf(BZfgets(bzline, bzfd, 19), "%f", &dem[indx].min_north);
-		if (bzerror != BZ_OK || pos == EOF) return -errno;
+		if (bzerror != BZ_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		pos = sscanf(BZfgets(bzline, bzfd, 19), "%f", &dem[indx].min_west);
-		if (bzerror != BZ_OK || pos == EOF) return -errno;
+		if (bzerror != BZ_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		pos = sscanf(BZfgets(bzline, bzfd, 19), "%f", &dem[indx].max_north);
-		if (bzerror != BZ_OK || pos == EOF) return -errno;
+		if (bzerror != BZ_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		/*
 			 Here X lines of DEM will be read until IPPD is reached.
@@ -950,7 +962,7 @@ int LoadSDF_GZ(char *name)
 
 			strncpy(path_plus_name, sdf_path, sizeof(path_plus_name) - 1);
 			strncat(path_plus_name, sdf_file, sizeof(path_plus_name) - 1);
-            spdlog::debug("Trying to load GZ compressed SDF file {}", path_plus_name);
+            //spdlog::debug("Trying to load GZ compressed SDF file {}", path_plus_name);
 			gzfd = gzopen(path_plus_name, "rb");
 
 			if (gzfd != NULL) success = 1;
@@ -968,19 +980,31 @@ int LoadSDF_GZ(char *name)
 
 		pos = sscanf(GZfgets(gzline, gzfd, 19), "%f", &dem[indx].max_west);
 		errmsg = gzerror(gzfd, &gzerr);
-		if (gzerr != Z_OK || pos == EOF) return -errno;
+		if (gzerr != Z_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		pos = sscanf(GZfgets(gzline, gzfd, 19), "%f", &dem[indx].min_north);
 		errmsg = gzerror(gzfd, &gzerr);
-		if (gzerr != Z_OK || pos == EOF) return -errno;
+		if (gzerr != Z_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		pos = sscanf(GZfgets(gzline, gzfd, 19), "%f", &dem[indx].min_west);
 		errmsg = gzerror(gzfd, &gzerr);
-		if (gzerr != Z_OK || pos == EOF) return -errno;
+		if (gzerr != Z_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		pos = sscanf(GZfgets(gzline, gzfd, 19), "%f", &dem[indx].max_north);
 		errmsg = gzerror(gzfd, &gzerr);
-		if (gzerr != Z_OK || pos == EOF) return -errno;
+		if (gzerr != Z_OK || pos == EOF) {
+            spdlog::error("Error loading \"{}\"", path_plus_name);
+            return -errno;
+        }
 
 		if (debug && (errmsg != NULL) && (gzerr != Z_OK && gzerr != Z_STREAM_END)) {
 			spdlog::error("LoadSDF_GZ: gzerr = {}, errmsg = [{}]", gzerr, errmsg);
@@ -2010,7 +2034,7 @@ int LoadDBMColors(struct site xmtr)
 */
 int LoadTopoData(bbox region)
 {
-    spdlog::debug("Loading topo data for boundaries: ({:.6f}N, {:.6f}W) to ({:.6f}N, {:.6f}W)", 
+    spdlog::info("Loading topo data for boundaries: ({:.6f}N, {:.6f}W) to ({:.6f}N, {:.6f}W)", 
         region.lower_right.lat,
         region.lower_right.lon,
         region.upper_left.lat,

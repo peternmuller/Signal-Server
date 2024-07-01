@@ -1048,13 +1048,17 @@ void do_allocs(void)
 
 int main(int argc, char *argv[])
 {
-    int x, y, z = 0, propmodel, knifeedge = 0, ppa = 0, normalise = 0,
+    int x, y, z = 0, knifeedge = 0, ppa = 0, normalise = 0,
       haf = 0, pmenv = 1, lidar=0, result, segments = 4;
+
+    PropModel prop_model;
 
     double min_lat, min_lon, max_lat, max_lon, rxlat, rxlon, txlat, txlon,
       west_min, west_max, nortRxHin, nortRxHax;
 
     bool use_threads = true;
+
+    bool use_radial = false;
 
     unsigned char LRmap = 0, txsites = 0, topomap = 0, geo = 0, kml =
         0, area_mode = 0, max_txsites, ngs = 0;
@@ -1139,6 +1143,7 @@ int main(int argc, char *argv[])
         fprintf(stdout, "     -ng Normalise Path Profile graph\n");
         fprintf(stdout, "     -haf Halve 1 or 2 (optional)\n");
         fprintf(stdout, "     -nothreads Turn off threaded processing\n");
+        fprintf(stdout, "     -rp Use experimental radial processing\n");
 
         fflush(stdout);
 
@@ -1176,7 +1181,7 @@ int main(int argc, char *argv[])
     ano_filename[0] = 0;
     earthradius = EARTHRADIUS;
     max_range = 1.0;
-    propmodel = 1;		//ITM
+    prop_model = ITM_LR;
     lat = 0;
     lon = 0;
     txh = 0;
@@ -1613,7 +1618,9 @@ int main(int argc, char *argv[])
             z = x + 1;
 
             if (z <= y && argv[z][0]) {
-                sscanf(argv[z], "%d", &propmodel);
+                int temp;
+                sscanf(argv[z], "%d", &temp);
+                prop_model = (PropModel)temp;
             }
         }
         // Prop model variant eg. urban/suburban
@@ -1647,6 +1654,12 @@ int main(int argc, char *argv[])
         if (strcmp(argv[x], "-nothreads") == 0) {
             z = x + 1;
             use_threads = false;
+        }
+
+        // Enable radial processing
+        if (strcmp(argv[x], "-rp") == 0) {
+            z = x + 1;
+            use_radial = true;
         }
 
         // Reliability % for ITM model
@@ -1748,7 +1761,7 @@ int main(int argc, char *argv[])
         spdlog::error("Receiver threshold out of range (-200 / +240)");
         exit(EINVAL);
     }
-    if (propmodel > 2 && propmodel < 7 && LR.frq_mhz < 150) {
+    if (prop_model > 2 && prop_model < 7 && LR.frq_mhz < 150) {
         spdlog::error("Frequency too low for Propagation model");
         exit(EINVAL);
     }
@@ -1791,11 +1804,17 @@ int main(int argc, char *argv[])
     spdlog::info("    TX site parameters: {:.6f}N, {:.6f}W, {:.0f} ft AGL", tx_site[0].lat, tx_site[0].lon, tx_site[0].alt);
     spdlog::info("    Plot parameters: {:.2f}-mile radius, resolution of {} ppd", max_range, ippd);
     spdlog::info("    Model parameters: {} MHz at {} W EIRP (dBd), {}% confidence", LR.frq_mhz, LR.erp, (uint8_t)(LR.conf * 100));
-    spdlog::info("");
+    spdlog::info("    Map segments: {}", segments);
+    if (metric)
+        spdlog::info("    Metric mode");
     if (use_threads)
         spdlog::info("    Using threaded processing");
     else
         spdlog::warn("    Not using threaded processing");
+    if (use_radial)
+    {
+        spdlog::info("    Using experimental radial processing");
+    }
     spdlog::info("");
     spdlog::info("    Directories:");
     spdlog::info("        SDF: {}", sdf_path);
@@ -1997,15 +2016,22 @@ int main(int argc, char *argv[])
     }
 
     if (ppa == 0) {
-        if (propmodel == 2) {  // Model 2 = LOS
+        if (prop_model == LOS) {  // Model 2 = LOS
             cropping = false; // TODO: File is written in DoLOS() so this needs moving to PlotPropagation() to allow styling, cropping etc
             PlotLOSMap(tx_site[0], altitudeLR, ano_filename, use_threads, segments);
             DoLOS(mapfile, geo, kml, ngs, tx_site, txsites);
         } else {
             // 90% of effort here
-            PlotPropagation(tx_site[0], plot_bounds, altitudeLR, ano_filename, propmodel, knifeedge, haf, pmenv, use_threads, (uint8_t)segments);
-
-            spdlog::debug("Finished PlotPropagation()");
+            if (use_radial)
+            {
+                PlotPropagationRadius(tx_site[0], max_range, altitudeLR, ano_filename, prop_model, knifeedge, haf, pmenv, use_threads, (uint8_t)segments);
+                spdlog::debug("Finished PlotPropagationRadius()");
+            }
+            else
+            {
+                PlotPropagation(tx_site[0], plot_bounds, altitudeLR, ano_filename, prop_model, knifeedge, haf, pmenv, use_threads, (uint8_t)segments);
+                spdlog::debug("Finished PlotPropagation()");
+            }
 
             if (cropping) {
                 // CROPPING Factor determined in propPathLoss().
@@ -2065,7 +2091,7 @@ int main(int argc, char *argv[])
         strncpy(tx_site[0].name, "Tx", 3);
         strncpy(tx_site[1].name, "Rx", 3);
         PlotPath(tx_site[0], tx_site[1], 1);
-        PathReport(tx_site[0], tx_site[1], tx_site[0].filename, 0, propmodel, pmenv, rxGain);
+        PathReport(tx_site[0], tx_site[1], tx_site[0].filename, 0, prop_model, pmenv, rxGain);
         // Order flipped for benefit of graph. Makes no difference to data.
         SeriesData(tx_site[1], tx_site[0], tx_site[0].filename, 1, normalise);
     }
