@@ -13,19 +13,28 @@
 #include "egli.hh"
 #include "soil.hh"
 #include "../geo.hh"
-#include <thread>
 #include <mutex>
 #include <spdlog/spdlog.h>
 #include <vector>
 #include <limits.h>
 
 namespace {
-	std::vector<std::thread> threads;
-    std::mutex maskMutex;
 	bool ***processed;
 	bool has_init_processed = false;
 
-    // We use this to store what points in our plot have already been processed
+    // Storage for processing threads
+    std::vector<std::thread> threads;
+
+    // Storage for processing thread futures
+    std::vector<std::future<void *>> futures;
+
+    // Mutex for processed vector
+    std::mutex maskMutex;
+
+    // Thread progress vector
+    std::vector<progress_t> thread_progress;
+
+    // This is a 3D vector of the pixels & layers in our plot that have or have not been processed
     std::vector<std::vector<std::vector<bool>>> processedPoints;
 
 	void init_processed()
@@ -44,8 +53,6 @@ namespace {
         // Initialize our vector to the correct size (this is ugly but apparently the best way to do this)
         processedPoints = std::vector<std::vector<std::vector<bool>>>(MAXPAGES, std::vector<std::vector<bool>>(ippd, std::vector<bool>(ippd)));
 
-        spdlog::debug("Initialized processedPoints vector of side {}x{}x{}", MAXPAGES, ippd, ippd);
-
         // Populate our processedPoints vector with the points to process
 		for (i = 0; i < MAXPAGES; i++) {
 			for (x = 0; x < ippd; x++) {
@@ -55,6 +62,8 @@ namespace {
                 } 
 			}
 		}
+
+        spdlog::debug("Initialized processedPoints vector of side {}x{}x{}", MAXPAGES, ippd, ippd);
 
 		has_init_processed = true;
 	}
@@ -104,7 +113,7 @@ namespace {
      * 
      * @param *parameters parameters object for the propagation range
     */
-	void* rangePropagation(void *parameters)
+	void* rangePropagation(progress_t &progress, void *parameters)
 	{
         // Create propagationRange opbject based on our parameters
 		PropagationRange *v = (PropagationRange*)parameters;
@@ -121,9 +130,16 @@ namespace {
         // If our min & max lon coords are the same, it's a vertical line
         bool vertical = (v->min_west == v->max_west) ? true : false;
 
-        spdlog::debug("Starting rangePropagation for {} range {:.6f}N {:.6f}W to {:.6f}N {:.6f}W, {:.8f} dpp",
+        // Calculate total number of points we are going to process
+        unsigned int totalPoints = vertical ? (int)((v->max_north - v->min_north) / dpp) : (int)((v->max_west - v->min_west) / dpp);
+        progress.total.store(totalPoints);
+
+        // Init the count
+        progress.count.store(0);
+
+        spdlog::debug("Starting rangePropagation for {} range {:.6f}N {:.6f}W to {:.6f}N {:.6f}W, {} points at {:.8f} dpp [Segment {}]",
             vertical ? "vertical" : "horizontal",
-            v->min_north, v->min_west, v->max_north, v->max_west, dpp);
+            v->min_north, v->min_west, v->max_north, v->max_west, progress.total, dpp, progress.id);
 
         // Init our varaibles for tracking position over the loop
         double lat = v->min_north;
@@ -146,8 +162,10 @@ namespace {
 			else
 				PlotPropPath(v->source, edge, v->mask_value, v->fd, v->prop_model,
 					v->knifeedge, v->pmenv);
-
+            // Increment our counters
 			++y;
+            progress.count++;
+            // Incremenet our lat/lon as needed
 			if(vertical) {
                 lat = (double)v->min_north + (dpp * (double)y);
             } else {
@@ -163,7 +181,7 @@ namespace {
 		return NULL;
 	}
 
-    void* radiusPropagation(void *parameters)
+    void* radiusPropagation(progress_t &progress, void *parameters)
     {
         // Create a prop radius from our parameters
         PropagationRadius *r = (PropagationRadius*)parameters;
@@ -221,20 +239,6 @@ namespace {
 
         return NULL;
     }
-  
-	/// @brief Add a new range thread to our threads array
-	/// @param arg arguments for rangePropagation
-	void beginRangeThread(void *arg)
-	{
-		threads.emplace_back(std::thread(rangePropagation, arg));
-	}
-
-    /// @brief Add a new radius thread to our threads array
-    /// @param arg arguments for radiusPropagation
-    void beginRadiusThread(void *arg)
-    {
-        threads.emplace_back(std::thread(radiusPropagation, arg));
-    }
 
 	/// @brief Wait for all threads in our threads array to finish
 	void finishThreads()
@@ -242,6 +246,39 @@ namespace {
         for (auto& th : threads)
             th.join();
 	}
+
+    /// @brief Wait for the progress accumulators to finish, then finish out any running threads
+    void finishProgress()
+    {
+        unsigned int total_points = 0;
+        unsigned int points_processed = 0;
+        
+        // Calculate the expected total progress count
+        for (const auto& p : thread_progress)
+        {
+            if (p.total <= 0) { std::this_thread::sleep_for( std::chrono::milliseconds(2) ); }
+            total_points += p.total;
+        }
+
+        spdlog::debug("{} total points to process", total_points);
+        
+        // Await progress completion
+        while (points_processed < total_points)
+        {
+            std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+
+            // Reset count for this check
+            points_processed = 0;
+
+            for (const auto& p : thread_progress)
+            {
+                points_processed += p.count;
+            }
+
+            // Update print
+            spdlog::info("[{: 3d}%] Processing {}/{} points", int(points_processed * 100 / total_points), points_processed, total_points);
+        }
+    }
 }
 
 /*
@@ -872,6 +909,9 @@ void PlotLOSMap(struct site source, double altitude, char *plo_filename,
 	double range_max_north[] = {max_north, max_north, min_north, max_north};
 	PropagationRange *r = new PropagationRange[segments];
 
+    // Size our progress vector appropriately
+    thread_progress = std::vector<progress_t>(segments);
+
 	for(int i = 0; i < segments; ++i) {
         r[i].los = true;
 
@@ -887,10 +927,14 @@ void PlotLOSMap(struct site source, double altitude, char *plo_filename,
 		r[i].mask_value = mask_value;
 		r[i].fd = fd;
 
+        // Set the segment id
+        thread_progress[i].id = i;
+
 		if(use_threads)
-			beginRangeThread(&r[i]);
+			//threads.push_back(std::thread(rangePropagation, i, &r[i]));
+            futures.push_back( std::async( std::launch::async, rangePropagation, std::ref(thread_progress[i]), &r[i] ) );
 		else
-			rangePropagation(&r[i]);
+			rangePropagation(thread_progress[i], &r[i]);
 	}
 
 	if(use_threads)
@@ -1056,6 +1100,9 @@ void PlotPropagation(struct site source, bbox bounds,
         spdlog::error("Our vector of ranges ({}) does not match expected segment count {}", ranges.size(), segments);
         exit(1);
     }
+
+    // Size our progress vector appropriately
+    thread_progress = std::vector<progress_t>(segments);
     
     // Init our vector for storing processing progress
     if (!has_init_processed) {
@@ -1073,25 +1120,33 @@ void PlotPropagation(struct site source, bbox bounds,
         ranges[i].prop_model = prop_model;
         ranges[i].knifeedge = knifeedge;
         ranges[i].pmenv = pmenv;
+        // Set the segment id
+        thread_progress[i].id = i;
         // Start a thread if we're using threads
         if (use_threads) {
             spdlog::debug("Starting calc thread for edge segment {:.6f}N {:.6f}W to {:.6f}N {:.6f}W", ranges[i].min_north, ranges[i].min_west, ranges[i].max_north, ranges[i].max_west);
-            beginRangeThread(&ranges[i]);
+            //threads.push_back(std::thread(rangePropagation, i, &ranges[i]));
+            futures.push_back( std::async( std::launch::async, rangePropagation, std::ref(thread_progress[i]), &ranges[i] ) );
         }
         else {
             spdlog::debug("Starting single-thread calc for edge segment {:.6f}N {:.6f}W to {:.6f}N {:.6f}W", ranges[i].min_north, ranges[i].min_west, ranges[i].max_north, ranges[i].max_west);
-            rangePropagation(&ranges[i]);
+            rangePropagation(thread_progress[i], &ranges[i]);
         }
     }
 
+	// Wait for threads to finish
 	if(use_threads)
-		finishThreads();
+    {
+        spdlog::debug("Waiting for threads to finish...");
+        //finishThreads();
+        finishProgress();
+    }
 
 	for(size_t i = 0; i < ranges.size(); i++){
 		ranges.erase(ranges.begin() + i);
 	}
 
-       if (fd != NULL)
+    if (fd != NULL)
 		fclose(fd);
 
 	if (mask_value < 30)
@@ -1216,6 +1271,9 @@ void PlotPropagationRadius(struct site source, double range,
         exit(1);
     }
 
+    // Size our progress vector appropriately
+    thread_progress = std::vector<progress_t>(segments);
+
     // Init our vector for storing processing progress
     if (!has_init_processed) {
         init_processed();
@@ -1223,14 +1281,16 @@ void PlotPropagationRadius(struct site source, double range,
 
     // Iterate over the final list of ranges
     for (size_t i = 0; i < radii.size(); i++) {
+        // Set the segment id
+        thread_progress[i].id = i;
         // Start a thread if we're using threads
         if (use_threads) {
             spdlog::debug("Starting calc thread for radius segment {:.2f} to {:.2f}", radii[i].start_angle_rad / DEG2RAD, radii[i].stop_angle_rad / DEG2RAD);
-            beginRadiusThread(&radii[i]);
+            futures.push_back( std::async( std::launch::async, radiusPropagation, std::ref(thread_progress[i]), &radii[i] ) );
         }
         else {
             spdlog::debug("Starting single-thread calc for radius segment {:.2f} to {:.2f}", radii[i].start_angle_rad / DEG2RAD, radii[i].stop_angle_rad / DEG2RAD);
-            radiusPropagation(&radii[i]);
+            radiusPropagation(thread_progress[i], &radii[i]);
         }
     }
 
@@ -1248,10 +1308,14 @@ void PlotPropagationRadius(struct site source, double range,
 
     // Close the file
     if (fd != NULL)
+    {
         fclose(fd);
+    }
 
 	if (mask_value < 30)
-		mask_value++;
+    {
+        mask_value++;
+    }
 }
 
 void PlotPath(struct site source, struct site destination, char mask_value)

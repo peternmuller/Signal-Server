@@ -721,7 +721,7 @@ int LoadSDF_BZ(char *name)
 		}
 		if (!success) return -errno;
 
-		spdlog::debug("Decompressing \"{}\" into page {}...", path_plus_name, indx + 1);
+		spdlog::debug("Decompressing BZ SDF \"{}\" into page {}...", path_plus_name, indx + 1);
 
 		pos = EOF;
 		bzbuf_empty = 1;
@@ -839,6 +839,10 @@ int LoadSDF_BZ(char *name)
 				if (dem[indx].min_west > min_west) min_west = dem[indx].min_west;
 			}
 		}
+
+        spdlog::debug("Loaded GZ SDF topo data statistics: min elevation {}, max elevation {}, bounds {:.6f}N {:.6f}W to {:.6f}N {:.6f}W",
+            min_elevation, max_elevation, min_north, min_west, max_north, max_west
+        );
 
 		return 1;
 	}
@@ -972,7 +976,7 @@ int LoadSDF_GZ(char *name)
 		if (gzbuffer(gzfd, GZBUFFER))  // Allocate 32K buffer
 			return -EIO;
 
-		spdlog::debug("Decompressing \"{}\" into page {}...", path_plus_name, indx + 1);
+		spdlog::debug("Decompressing GZ SDF \"{}\" into page {}...", path_plus_name, indx + 1);
 
 		pos = EOF;
 		gzbuf_empty = 1;
@@ -1006,111 +1010,113 @@ int LoadSDF_GZ(char *name)
             return -errno;
         }
 
-		if (debug && (errmsg != NULL) && (gzerr != Z_OK && gzerr != Z_STREAM_END)) {
+		if (debug && (errmsg != NULL) && (gzerr != Z_OK && gzerr != Z_STREAM_END))
 			spdlog::error("LoadSDF_GZ: gzerr = {}, errmsg = [{}]", gzerr, errmsg);
 
-			/*
-				 Here X lines of DEM will be read until IPPD is reached.
-				 Each .sdf tile contains 1200x1200 = 1.44M 'points'
-				 Each point is sampled for 1200 resolution!
-			 */
-			posn = NULL;
-			for (x = 0; x < ippd; x++) {
-				for (y = 0; y < ippd; y++) {
-					for (j = 0; j < jgets; j++) {
-						posn = GZfgets(jline, gzfd, 19);
-						errmsg = gzerror(gzfd, &gzerr);
-						if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
-					}
+        /*
+                Here X lines of DEM will be read until IPPD is reached.
+                Each .sdf tile contains 1200x1200 = 1.44M 'points'
+                Each point is sampled for 1200 resolution!
+            */
+        posn = NULL;
+        for (x = 0; x < ippd; x++) {
+            for (y = 0; y < ippd; y++) {
+                for (j = 0; j < jgets; j++) {
+                    posn = GZfgets(jline, gzfd, 19);
+                    errmsg = gzerror(gzfd, &gzerr);
+                    if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
+                }
 
-					posn = GZfgets(line, gzfd, 19);
-					errmsg = gzerror(gzfd, &gzerr);
-					if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
+                posn = GZfgets(line, gzfd, 19);
+                errmsg = gzerror(gzfd, &gzerr);
+                if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
 
-					data = atoi(line);
+                data = atoi(line);
 
-					dem[indx].data[x][y] = data;
-					dem[indx].signal[x][y] = 0;
-					dem[indx].mask[x][y] = 0;
+                dem[indx].data[x][y] = data;
+                dem[indx].signal[x][y] = 0;
+                dem[indx].mask[x][y] = 0;
 
-					if (data > dem[indx].max_el) dem[indx].max_el = data;
+                if (data > dem[indx].max_el) dem[indx].max_el = data;
 
-					if (data < dem[indx].min_el) dem[indx].min_el = data;
-				}
+                if (data < dem[indx].min_el) dem[indx].min_el = data;
+            }
 
-				if (ippd == 600) {
-					for (j = 0; j < IPPD; j++) {
-						posn = GZfgets(jline, gzfd, 19);
-						errmsg = gzerror(gzfd, &gzerr);
-						if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
-					}
-				}
-				if (ippd == 300) {
-					for (j = 0; j < IPPD; j++) {
-						posn = GZfgets(jline, gzfd, 19);
-						errmsg = gzerror(gzfd, &gzerr);
-						if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
-						posn = GZfgets(jline, gzfd, 19);
-						errmsg = gzerror(gzfd, &gzerr);
-						if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
-						posn = GZfgets(jline, gzfd, 19);
-						errmsg = gzerror(gzfd, &gzerr);
-						if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
-					}
-				}
-			}
+            if (ippd == 600) {
+                for (j = 0; j < IPPD; j++) {
+                    posn = GZfgets(jline, gzfd, 19);
+                    errmsg = gzerror(gzfd, &gzerr);
+                    if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
+                }
+            }
+            if (ippd == 300) {
+                for (j = 0; j < IPPD; j++) {
+                    posn = GZfgets(jline, gzfd, 19);
+                    errmsg = gzerror(gzfd, &gzerr);
+                    if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
+                    posn = GZfgets(jline, gzfd, 19);
+                    errmsg = gzerror(gzfd, &gzerr);
+                    if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
+                    posn = GZfgets(jline, gzfd, 19);
+                    errmsg = gzerror(gzfd, &gzerr);
+                    if ((gzerr != Z_STREAM_END && gzerr != Z_OK) || posn == NULL) return -EIO;
+                }
+            }
+        }
 
-			gzclose_r(gzfd);  // close for reading (avoids write code)
+        gzclose_r(gzfd);  // close for reading (avoids write code)
 
-			if (dem[indx].min_el < min_elevation) min_elevation = dem[indx].min_el;
+        if (dem[indx].min_el < min_elevation) min_elevation = dem[indx].min_el;
 
-			if (dem[indx].max_el > max_elevation) max_elevation = dem[indx].max_el;
+        if (dem[indx].max_el > max_elevation) max_elevation = dem[indx].max_el;
 
-			if (max_north == -90)
-				max_north = dem[indx].max_north;
+        if (max_north == -90)
+            max_north = dem[indx].max_north;
 
-			else if (dem[indx].max_north > max_north)
-				max_north = dem[indx].max_north;
+        else if (dem[indx].max_north > max_north)
+            max_north = dem[indx].max_north;
 
-			if (min_north == 90)
-				min_north = dem[indx].min_north;
+        if (min_north == 90)
+            min_north = dem[indx].min_north;
 
-			else if (dem[indx].min_north < min_north)
-				min_north = dem[indx].min_north;
+        else if (dem[indx].min_north < min_north)
+            min_north = dem[indx].min_north;
 
-			if (max_west == -1)
-				max_west = dem[indx].max_west;
+        if (max_west == -1)
+            max_west = dem[indx].max_west;
 
-			else {
-				if (abs(dem[indx].max_west - max_west) < 180) {
-					if (dem[indx].max_west > max_west) max_west = dem[indx].max_west;
-				}
+        else {
+            if (abs(dem[indx].max_west - max_west) < 180) {
+                if (dem[indx].max_west > max_west) max_west = dem[indx].max_west;
+            }
 
-				else {
-					if (dem[indx].max_west < max_west) max_west = dem[indx].max_west;
-				}
-			}
+            else {
+                if (dem[indx].max_west < max_west) max_west = dem[indx].max_west;
+            }
+        }
 
-			if (min_west == 360)
-				min_west = dem[indx].min_west;
+        if (min_west == 360)
+            min_west = dem[indx].min_west;
 
-			else {
-				if (fabs(dem[indx].min_west - min_west) < 180.0) {
-					if (dem[indx].min_west < min_west) min_west = dem[indx].min_west;
-				}
+        else {
+            if (fabs(dem[indx].min_west - min_west) < 180.0) {
+                if (dem[indx].min_west < min_west) min_west = dem[indx].min_west;
+            }
 
-				else {
-					if (dem[indx].min_west > min_west) min_west = dem[indx].min_west;
-				}
-			}
+            else {
+                if (dem[indx].min_west > min_west) min_west = dem[indx].min_west;
+            }
+        }
 
-			return 1;
-		}
+        spdlog::debug("Loaded GZ SDF topo data statistics: min elevation {}, max elevation {}, bounds {:.6f}N {:.6f}W to {:.6f}N {:.6f}W",
+            min_elevation, max_elevation, min_north, min_west, max_north, max_west
+        );
 
-		else
-			return 0;
+        return 1;
+    }
+    else
+        return 0;
 	}
-}
 
 int LoadSDF(char *name)
 {
@@ -1223,6 +1229,10 @@ int LoadSDF(char *name)
 					if (dem[indx].min_west > min_west) min_west = dem[indx].min_west;
 				}
 			}
+
+            spdlog::debug("Loaded GZ SDF topo data statistics: min elevation {}, max elevation {}, bounds {:.6f}N {:.6f}W to {:.6f}N {:.6f}W",
+                min_elevation, max_elevation, min_north, min_west, max_north, max_west
+            );
 
 			return_value = 1;
 		}
@@ -2071,7 +2081,10 @@ int LoadTopoData(bbox region)
             if (ippd == 3600) strcat(string, "-hd");
             // Load the tile
             int success;
-            if ((success = LoadSDF(string)) < 0) return -success;
+            if ((success = LoadSDF(string)) < 0) 
+            {
+                return -success;
+            }
         }
     }
 

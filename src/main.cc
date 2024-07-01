@@ -38,6 +38,7 @@
 #include "models/los.hh"
 #include "models/pel.hh"
 #include "image.hh"
+#include "logos.hh"
 
 #include <spdlog/spdlog.h>
 
@@ -45,7 +46,7 @@ int MAXPAGES = 10*10;
 int IPPD = 1200;
 int ARRAYSIZE = (MAXPAGES * IPPD) + 10;
 
-char sdf_path[255], opened = 0, gpsav = 0, ss_name[16], dashes[80], *color_file = NULL;
+char sdf_path[255], opened = 0, gpsav = 0, dashes[80], *color_file = NULL;
 
 double earthradius, max_range = 0.0, forced_erp, dpp, ppd, yppd,
     fzone_clearance = 0.6, forced_freq, clutter, lat, lon, txh, tercon, terdic,
@@ -1081,13 +1082,23 @@ int main(int argc, char *argv[])
         IPPD = 6000; // will be overridden based upon file header...
     }
 
-    strncpy(ss_name, "Signal Server\0", 14);
+    spdlog::info(VERT_SEP);
 
-    fprintf(stdout, VERT_SEP "\n");
-    fprintf(stdout, "%s %d.%d (%s %s)\n", ss_name, VER_MAJ, VER_MIN, GIT_BRANCH, GIT_COMMIT_HASH);
-    fprintf(stdout, "    Compile date: %s %s\n", __DATE__, __TIME__);
-    fprintf(stdout, "    Built for %d DEM tiles at %d pixels\n", MAXPAGES, IPPD);
-    fprintf(stdout, VERT_SEP "\n");
+    if (strstr(argv[0], "signalserverHD")) {
+        spdlog::info(sshd_block);
+    }
+    else if (strstr(argv[0], "signalserverLIDAR")) {
+        spdlog::info(sslidar_block);
+    }
+    else
+    {
+        spdlog::info(ss_block);
+    }
+
+    spdlog::info("Version {}.{} ({} {})", VER_MAJ, VER_MIN, GIT_BRANCH, GIT_COMMIT_HASH);
+    spdlog::info("    Compile date: {} {}", __DATE__, __TIME__);
+    spdlog::info("    Built for {} DEM tiles at {} pixels", MAXPAGES, IPPD);
+    spdlog::info(VERT_SEP);
 
     if (argc == 1) {
         fprintf(stdout, "License: GNU General Public License (GPL) version 2\n\n");

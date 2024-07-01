@@ -2,6 +2,7 @@
 #define _MAIN_HH_
 
 #include <stdio.h>
+#include <string>
 
 #include "common.hh"
 

@@ -3,6 +3,10 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <atomic>
+#include <thread>
+#include <future>
+#include <ctime>
 
 #include "../common.hh"
 
@@ -46,6 +50,13 @@ struct PropagationRadius {
     FILE *fd;
     PropModel prop_model;
     int knifeedge, pmenv, points;
+};
+
+// Struct for storing thread progress
+struct progress_t {
+    int id;
+    std::atomic<unsigned int> count {} ;
+    std::atomic<unsigned int> total {} ;
 };
 
 void PlotLOSPath(struct site source, struct site destination, char mask_value);
