@@ -2088,17 +2088,11 @@ int main(int argc, char *argv[])
 
         if (tx_site[0].lon < -180.0)
             tx_site[0].lon += 360;
-
         if (cropping) {
-            spdlog::debug("| {:.6f} ", tx_site[0].lat+cropLat);
-            spdlog::debug("| {:.6f} ", tx_site[0].lon+cropLon);
-            spdlog::debug("| {:.6f} ", tx_site[0].lat-cropLat);
-            spdlog::debug("| {:.6f} |",tx_site[0].lon-cropLon);
+            spdlog::info("Area boundaries:{:.6f} | {:.6f} | {:.6f} | {:.6f} ", tx_site[0].lat+cropLat, tx_site[0].lon+cropLon, tx_site[0].lat-cropLat,tx_site[0].lon-cropLon);
+
         } else {
-            spdlog::debug("| {:.6f} ", max_north);
-            spdlog::debug("| {:.6f} ", east);
-            spdlog::debug("| {:.6f} ", min_north);
-            spdlog::debug("| {:.6f} |",west);
+            spdlog::info("Area boundaries:{:.6f} | {:.6f} | {:.6f} | {:.6f} ",max_north,east,min_north,west);
         }
 
     } else {
