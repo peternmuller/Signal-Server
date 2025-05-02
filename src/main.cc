@@ -1082,8 +1082,6 @@ int main(int argc, char *argv[])
         IPPD = 6000; // will be overridden based upon file header...
     }
 
-    spdlog::info(VERT_SEP);
-
     if (strstr(argv[0], "signalserverHD")) {
         spdlog::info(sshd_block);
     }
@@ -1098,7 +1096,7 @@ int main(int argc, char *argv[])
     spdlog::info("Version {}.{} ({} {})", VER_MAJ, VER_MIN, GIT_BRANCH, GIT_COMMIT_HASH);
     spdlog::info("    Compile date: {} {}", __DATE__, __TIME__);
     spdlog::info("    Built for {} DEM tiles at {} pixels", MAXPAGES, IPPD);
-    spdlog::info(VERT_SEP);
+    spdlog::info("");
 
     if (argc == 1) {
         fprintf(stdout, "License: GNU General Public License (GPL) version 2\n\n");
